@@ -27,7 +27,7 @@ datasource:
 ---
 spring:
   kafka:
-    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:broker:29092}
+    bootstrap-servers: localhost:9092
     consumer:
       group-id: idempotency-demo
       auto-offset-reset: earliest
@@ -40,7 +40,7 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 topics:
-  input: ${TOPICS_INPUT:hello-world}
+  input: hello-world
   dlq:
-    pipeline: ${TOPICS_DLQ_PIPELINE:hello-world.dlq}
-    business: ${TOPICS_DLQ_BUSINESS:hello-world-business.dlq}
+    pipeline: hello-world.dlq
+    business: hello-world-business.dlq

@@ -22,7 +22,7 @@ import java.util.Map;
 @EnableKafka
 @Configuration
 public class KafkaConfig {
-    @Value("${SPRING_KAFKA_BOOTSTRAP_SERVERS:broker:29092}")
+    @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
 
     private TopicProperties topicProperties;
