@@ -1,1 +1,1 @@
-docker ps -a | grep -E 'broker|kafka|zookeeper|ksqldb|connect|schema-registry|control-center' | awk '{print $1}' | xargs docker rm -f
+docker ps -a | grep -E 'broker|kafka|zookeeper|ksqldb|connect|schema-registry|control-center|kafkadd-app' | awk '{print $1}' | xargs docker rm -f

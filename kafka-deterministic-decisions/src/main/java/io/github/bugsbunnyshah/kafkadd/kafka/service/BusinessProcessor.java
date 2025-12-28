@@ -45,39 +45,47 @@ public class BusinessProcessor {
 
     public void doWork(String payload) {
         try {
-            // commit-safe business logic
             log.info("execute_business_logic " + payload);
+            /*if(true) {
+                throw new RuntimeException("error_dlq_test");
+            }*/
 
             JsonObject payloadJson = JsonParser.parseString(payload).getAsJsonObject();
             String eventId = payloadJson.get("email").getAsString();
 
             if (this.store.seen(eventId)) {
-                // if logic_error, then business dlq
                 JsonObject errorJson = new JsonObject();
                 errorJson.addProperty("business_error", "duplicate_event");
                 errorJson.addProperty("payload", payload);
 
-                this.handleError(errorJson.toString());
-            } else {
-                this.store.markProcessed(eventId);
+                this.publishBusinessReject(errorJson.toString());
+                return; // important: handled
             }
+
+            this.store.markProcessed(eventId);
+
         } catch (Exception e) {
-            // if system_error, then business dlq
             JsonObject errorJson = new JsonObject();
             errorJson.addProperty("system_error", "system_error");
-            errorJson.addProperty("system_error", e.getMessage());
+            errorJson.addProperty("message", e.getMessage()); // don't overwrite
             errorJson.addProperty("payload", payload);
 
-            this.handleError(errorJson.toString());
+            this.publishSystemDlq(errorJson.toString());
         }
     }
 
-    public void handleError(String payload) {
+    public void publishBusinessReject(String payload) {
         String domain = "user";
-        String key = domain + ": error";
-
-        // send
-        String dlqBusinessTopic = this.topicProperties.getDlq().getBusiness();
-        kafkaTemplate.send(new ProducerRecord<>(dlqBusinessTopic, key, payload));
+        String key = domain + ":reject";
+        String topic = this.topicProperties.getDlq().getBusiness(); // hello-world-business.dlq
+        kafkaTemplate.send(new ProducerRecord<>(topic, key, payload));
     }
+
+    public void publishSystemDlq(String payload) {
+        String domain = "user";
+        String key = domain + ":system";
+        String topic = this.topicProperties.getDlq().getPipeline(); // hello-world.dlq
+        kafkaTemplate.send(new ProducerRecord<>(topic, key, payload));
+    }
+
 }

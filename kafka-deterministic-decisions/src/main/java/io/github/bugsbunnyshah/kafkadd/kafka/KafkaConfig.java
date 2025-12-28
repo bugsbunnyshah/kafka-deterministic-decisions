@@ -22,7 +22,7 @@ import java.util.Map;
 @EnableKafka
 @Configuration
 public class KafkaConfig {
-    @Value("localhost:9092")
+    @Value("${SPRING_KAFKA_BOOTSTRAP_SERVERS:broker:29092}")
     private String bootstrapServers;
 
     private TopicProperties topicProperties;

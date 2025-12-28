@@ -1,5 +1,3 @@
----
-version: '2'
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:6.2.15
@@ -11,6 +9,7 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks: [kafkanet]
 
   broker:
     image: confluentinc/cp-server:6.2.15
@@ -20,27 +19,44 @@ services:
     depends_on:
       - zookeeper
     ports:
-      - "9092:9092"
       - "9101:9101"
+      # Optional: uncomment ONLY if you want to hit Kafka from your host machine too.
+      # - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+
+      # ---- INTERNAL-ONLY Kafka listener (Docker network) ----
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:29092"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://broker:29092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+
+      # ---- Single-node friendliness ----
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+      # ---- JMX ----
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
-      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker:29092
+
+      # ---- Confluent bits ----
+      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: "broker:29092"
       CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
-      CONFLUENT_METRICS_ENABLE: 'true'
-      CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
+      CONFLUENT_METRICS_ENABLE: "true"
+      CONFLUENT_SUPPORT_CUSTOMER_ID: "anonymous"
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "cub kafka-ready -b broker:29092 1 40"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    networks: [kafkanet]
 
   schema-registry:
     image: confluentinc/cp-schema-registry:6.2.15
@@ -53,8 +69,9 @@ services:
       - "8081:8081"
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "broker:29092"
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+    networks: [kafkanet]
 
   connect:
     image: cnfldemos/cp-server-connect-datagen:0.5.0-6.2.0
@@ -67,7 +84,7 @@ services:
     ports:
       - "8083:8083"
     environment:
-      CONNECT_BOOTSTRAP_SERVERS: 'broker:29092'
+      CONNECT_BOOTSTRAP_SERVERS: "broker:29092"
       CONNECT_REST_ADVERTISED_HOST_NAME: connect
       CONNECT_REST_PORT: 8083
       CONNECT_GROUP_ID: compose-connect-group
@@ -80,13 +97,13 @@ services:
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
       CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
       CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
-      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      # CLASSPATH required due to CC-2422
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
       CLASSPATH: /usr/share/java/monitoring-interceptors/monitoring-interceptors-6.2.15.jar
       CONNECT_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
       CONNECT_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
       CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
       CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+    networks: [kafkanet]
 
   control-center:
     image: confluentinc/cp-enterprise-control-center:6.2.15
@@ -101,8 +118,8 @@ services:
     ports:
       - "9021:9021"
     environment:
-      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
-      CONTROL_CENTER_CONNECT_CONNECT-DEFAULT_CLUSTER: 'connect:8083'
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: "broker:29092"
+      CONTROL_CENTER_CONNECT_CONNECT-DEFAULT_CLUSTER: "connect:8083"
       CONTROL_CENTER_KSQL_KSQLDB1_URL: "http://ksqldb-server:8088"
       CONTROL_CENTER_KSQL_KSQLDB1_ADVERTISED_URL: "http://localhost:8088"
       CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
@@ -111,6 +128,7 @@ services:
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
       CONFLUENT_METRICS_TOPIC_REPLICATION: 1
       PORT: 9021
+    networks: [kafkanet]
 
   ksqldb-server:
     image: confluentinc/cp-ksqldb-server:6.2.15
@@ -133,8 +151,9 @@ services:
       KSQL_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
       KSQL_KSQL_CONNECT_URL: "http://connect:8083"
       KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
-      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
-      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
+      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
+    networks: [kafkanet]
 
   ksqldb-cli:
     image: confluentinc/cp-ksqldb-cli:6.2.15
@@ -146,6 +165,7 @@ services:
       - ksqldb-server
     entrypoint: /bin/sh
     tty: true
+    networks: [kafkanet]
 
   ksql-datagen:
     image: confluentinc/ksqldb-examples:6.2.15
@@ -157,18 +177,20 @@ services:
       - broker
       - schema-registry
       - connect
-    command: "bash -c 'echo Waiting for Kafka to be ready... && \
-                       cub kafka-ready -b broker:29092 1 40 && \
-                       echo Waiting for Confluent Schema Registry to be ready... && \
-                       cub sr-ready schema-registry 8081 40 && \
-                       echo Waiting a few seconds for topic creation to finish... && \
-                       sleep 11 && \
-                       tail -f /dev/null'"
+    command: >
+      bash -c "echo Waiting for Kafka to be ready... &&
+               cub kafka-ready -b broker:29092 1 40 &&
+               echo Waiting for Confluent Schema Registry to be ready... &&
+               cub sr-ready schema-registry 8081 40 &&
+               echo Waiting a few seconds for topic creation to finish... &&
+               sleep 11 &&
+               tail -f /dev/null"
     environment:
       KSQL_CONFIG_DIR: "/etc/ksql"
-      STREAMS_BOOTSTRAP_SERVERS: broker:29092
-      STREAMS_SCHEMA_REGISTRY_HOST: schema-registry
+      STREAMS_BOOTSTRAP_SERVERS: "broker:29092"
+      STREAMS_SCHEMA_REGISTRY_HOST: "schema-registry"
       STREAMS_SCHEMA_REGISTRY_PORT: 8081
+    networks: [kafkanet]
 
   rest-proxy:
     image: confluentinc/cp-kafka-rest:6.2.15
@@ -177,11 +199,39 @@ services:
       - broker
       - schema-registry
     ports:
-      - 8082:8082
+      - "8082:8082"
     hostname: rest-proxy
     container_name: rest-proxy
     environment:
       KAFKA_REST_HOST_NAME: rest-proxy
-      KAFKA_REST_BOOTSTRAP_SERVERS: 'broker:29092'
+      KAFKA_REST_BOOTSTRAP_SERVERS: "broker:29092"
       KAFKA_REST_LISTENERS: "http://0.0.0.0:8082"
-      KAFKA_REST_SCHEMA_REGISTRY_URL: 'http://schema-registry:8081'
+      KAFKA_REST_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+    networks: [kafkanet]
+
+  kafkadd-app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    container_name: kafkadd-app
+    depends_on:
+      broker:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: "broker:29092"
+      SPRING_KAFKA_PRODUCER_PROPERTIES_MAX_BLOCK_MS: 3000
+      LOGGING_LEVEL_ORG_APACHE_KAFKA: DEBUG
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA: DEBUG
+      TOPICS_INPUT: hello-world
+      TOPICS_DLQ_PIPELINE: hello-world.dlq
+      TOPICS_DLQ_BUSINESS: hello-world-business.dlq
+    networks: [kafkanet]
+
+networks:
+  kafkanet:
+    name: kafkanet
+
+
