@@ -12,21 +12,21 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class BusinessProcessor {
     private static final Logger log = LoggerFactory.getLogger(BusinessProcessor.class);
 
-    private KafkaTemplate<Object, Object> kafkaTemplate;
-
-    private TopicProperties topicProperties;
-
+    private final KafkaTemplate<Object, Object> kafkaTemplate;
+    private final TopicProperties topicProperties;
     private final IdempotencyStore store;
 
-    public BusinessProcessor(KafkaTemplate<Object, Object> kafkaTemplate, TopicProperties topicProperties,
+    public BusinessProcessor(ProducerFactory<Object, Object> producerFactory,
+                             TopicProperties topicProperties,
                              IdempotencyStore store) {
-        this.kafkaTemplate = kafkaTemplate;
+        this.kafkaTemplate = new KafkaTemplate<>(producerFactory);
         this.topicProperties = topicProperties;
         this.store = store;
     }

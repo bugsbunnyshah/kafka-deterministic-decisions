@@ -20,7 +20,7 @@ public class KafkaConsumer {
         this.processor = processor;
     }
 
-    @KafkaListener(topics = "${topics.input}", groupId = "idempotency-demo")
+    @KafkaListener(topics = "${topics.input}", groupId = "idempotency-demo", containerFactory = "kafkaListenerContainerFactory")
     public void onMessage(
             @Payload String value,
             @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) String key,

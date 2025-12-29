@@ -1,1 +1,0 @@
-docker-compose exec broker kafka-console-producer --broker-list broker:9092 --topic hello-world
